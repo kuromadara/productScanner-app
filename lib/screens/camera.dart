@@ -27,6 +27,8 @@ class _CameraScreenState extends State<CameraScreen> {
   IconData validationIcon = Icons.error;
   File? croppedImageFile;
 
+  final GlobalKey _cameraPreviewKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +62,13 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final picture = await _cameraController?.takePicture();
       if (picture != null) {
-        final croppedFile = await cropImage(picture.path);
+        // Get the rectangle coordinates
+        final RenderBox renderBox =
+            _cameraPreviewKey.currentContext!.findRenderObject() as RenderBox;
+        final overlayBox =
+            renderBox.localToGlobal(Offset.zero) & renderBox.size;
+
+        final croppedFile = await cropImage(picture.path, overlayBox);
         if (croppedFile != null) {
           final inputImage = InputImage.fromFilePath(croppedFile.path);
 
@@ -82,64 +90,33 @@ class _CameraScreenState extends State<CameraScreen> {
     isBusy = false;
   }
 
-  Future<File?> cropImage(String imagePath) async {
+  Future<File?> cropImage(String imagePath, Rect overlayBox) async {
     try {
       final bytes = await File(imagePath).readAsBytes();
       final originalImage = img.decodeImage(Uint8List.fromList(bytes))!;
 
-      // Convert the image to grayscale
-      final grayscaleImage = img.grayscale(originalImage);
+      // Calculate the scale factors based on actual picture dimensions
+      final double scaleX =
+          originalImage.width / MediaQuery.of(context).size.width;
+      final double scaleY =
+          originalImage.height / MediaQuery.of(context).size.height;
 
-      // Convert the image to black and white
-      final bwImage = _convertToBlackAndWhite(grayscaleImage, 128);
+      // Apply the scale factors to the overlay box coordinates
+      final int left = (overlayBox.left * scaleX).toInt();
+      final int top = (overlayBox.top * scaleY).toInt();
+      final int width = (overlayBox.width * scaleX).toInt();
+      final int height = (overlayBox.height * scaleY).toInt();
 
-      // Detect the bounding box of the text
-      int left = bwImage.width, top = bwImage.height, right = 0, bottom = 0;
-      for (int y = 0; y < bwImage.height; y++) {
-        for (int x = 0; x < bwImage.width; x++) {
-          final pixel = bwImage.getPixel(x, y);
-          if (pixel == img.getColor(0, 0, 0)) {
-            // Black pixel
-            if (x < left) left = x;
-            if (x > right) right = x;
-            if (y < top) top = y;
-            if (y > bottom) bottom = y;
-          }
-        }
-      }
-
-      print('left: $left, top: $top, right: $right, bottom: $bottom');
-      if (left < right && top < bottom) {
-        final croppedImage = img.copyCrop(
-            bwImage, left, top, right - left + 1, bottom - top + 1);
-        final croppedFile = File(imagePath)
-          ..writeAsBytesSync(img.encodeJpg(croppedImage));
-        print("Cropped image saved successfully.");
-        return croppedFile;
-      } else {
-        print("Failed to detect valid bounding box.");
-        return null;
-      }
+      final croppedImage =
+          img.copyCrop(originalImage, left, top, width, height);
+      final croppedFile = File(imagePath)
+        ..writeAsBytesSync(img.encodeJpg(croppedImage));
+      print("Cropped image saved successfully.");
+      return croppedFile;
     } catch (e) {
       print("Error: $e");
       return null;
     }
-  }
-
-  img.Image _convertToBlackAndWhite(img.Image grayscaleImage, int threshold) {
-    final bwImage = img.Image(grayscaleImage.width, grayscaleImage.height);
-    for (int y = 0; y < grayscaleImage.height; y++) {
-      for (int x = 0; x < grayscaleImage.width; x++) {
-        final pixel = grayscaleImage.getPixel(x, y);
-        final l = img.getLuminance(pixel);
-        if (l > threshold) {
-          bwImage.setPixel(x, y, img.getColor(255, 255, 255)); // White
-        } else {
-          bwImage.setPixel(x, y, img.getColor(0, 0, 0)); // Black
-        }
-      }
-    }
-    return bwImage;
   }
 
   Future<void> validateBatchNumber() async {
@@ -202,18 +179,44 @@ class _CameraScreenState extends State<CameraScreen> {
       body: Column(
         children: [
           SizedBox(height: 10),
-          Container(
-            height: MediaQuery.of(context).size.height * 0.4,
-            child: isCameraInitialized && croppedImageFile == null
-                ? Center(
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: CameraPreview(_cameraController!),
+          Expanded(
+            child: Stack(
+              key: _cameraPreviewKey,
+              children: [
+                if (isCameraInitialized && croppedImageFile == null)
+                  CameraPreview(_cameraController!)
+                else if (croppedImageFile != null)
+                  Image.file(croppedImageFile!)
+                else
+                  Center(child: CircularProgressIndicator()),
+                if (isCameraInitialized)
+                  Positioned(
+                    left: 30,
+                    right: 30,
+                    top: 50,
+                    bottom: MediaQuery.of(context).size.height * 0.3,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.red,
+                          width: 3,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Place product information inside the rectangle',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
-                  )
-                : croppedImageFile != null
-                    ? Image.file(croppedImageFile!)
-                    : Center(child: CircularProgressIndicator()),
+                  ),
+              ],
+            ),
           ),
           SizedBox(height: 10),
           Row(
