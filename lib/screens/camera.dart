@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -23,6 +25,7 @@ class _CameraScreenState extends State<CameraScreen> {
   String validationMessage = '';
   Color validationMessageColor = Colors.red;
   IconData validationIcon = Icons.error;
+  File? croppedImageFile;
 
   final GlobalKey _cameraPreviewKey = GlobalKey();
 
@@ -59,21 +62,74 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final picture = await _cameraController?.takePicture();
       if (picture != null) {
-        final inputImage = InputImage.fromFilePath(picture.path);
-        final RecognizedText recognizedText =
-            await textRecognizer.processImage(inputImage);
-        setState(() {
-          scannedTextLines = recognizedText.text.split('\n');
-          validationMessage = '';
-          showValidationMessage = false;
-          showTextArea = true;
-        });
+        // Get the rectangle coordinates
+        final RenderBox renderBox =
+            _cameraPreviewKey.currentContext!.findRenderObject() as RenderBox;
+        final overlayBox =
+            renderBox.localToGlobal(Offset.zero) & renderBox.size;
+
+        // Process the captured image to get only the part inside the green square
+        final croppedFile =
+            await processCapturedImage(picture.path, overlayBox);
+        if (croppedFile != null) {
+          final inputImage = InputImage.fromFilePath(croppedFile.path);
+          final RecognizedText recognizedText =
+              await textRecognizer.processImage(inputImage);
+          setState(() {
+            scannedTextLines = recognizedText.text.split('\n');
+            validationMessage = '';
+            showValidationMessage = false;
+            showTextArea = true;
+            croppedImageFile = croppedFile;
+          });
+        }
       }
     } catch (e) {
       print(e);
     }
 
     isBusy = false;
+  }
+
+  Future<File?> processCapturedImage(String imagePath, Rect overlayBox) async {
+    try {
+      final bytes = await File(imagePath).readAsBytes();
+      final originalImage = img.decodeImage(Uint8List.fromList(bytes))!;
+
+      // Get the size of the Camera Preview
+      final previewSize = _cameraController!.value.previewSize!;
+      final previewWidth = previewSize.width;
+      final previewHeight = previewSize.height;
+
+      // Calculate the scaling factor for the coordinates
+      final double scaleX = originalImage.width / previewWidth;
+      final double scaleY = originalImage.height / previewHeight;
+
+      // Define the green rectangle on the screen
+      final double greenRectLeft = 30.0;
+      final double greenRectTop = 50.0;
+      final double greenRectWidth = MediaQuery.of(context).size.width - 60.0;
+      final double greenRectHeight = MediaQuery.of(context).size.height -
+          MediaQuery.of(context).size.height * 0.3 -
+          100.0;
+
+      // Apply the scaling factors to the green rectangle's coordinates to get the crop area
+      final int cropLeft = (greenRectLeft * scaleX).toInt();
+      final int cropTop = (greenRectTop * scaleY).toInt();
+      final int cropWidth = (greenRectWidth * scaleX).toInt();
+      final int cropHeight = (greenRectHeight * scaleY).toInt();
+
+      // Crop the image to the specified region
+      final croppedImage =
+          img.copyCrop(originalImage, cropLeft, cropTop, cropWidth, cropHeight);
+      final croppedFile = File('${Directory.systemTemp.path}/cropped_image.jpg')
+        ..writeAsBytesSync(img.encodeJpg(croppedImage));
+      print("Cropped image saved successfully.");
+      return croppedFile;
+    } catch (e) {
+      print("Error: $e");
+      return null;
+    }
   }
 
   Future<void> validateBatchNumber() async {
@@ -121,6 +177,7 @@ class _CameraScreenState extends State<CameraScreen> {
       showTextArea = false;
       showValidationMessage = false;
       validationMessage = '';
+      croppedImageFile = null;
     });
   }
 
@@ -139,8 +196,10 @@ class _CameraScreenState extends State<CameraScreen> {
             child: Stack(
               key: _cameraPreviewKey,
               children: [
-                if (isCameraInitialized)
+                if (isCameraInitialized && croppedImageFile == null)
                   CameraPreview(_cameraController!)
+                else if (croppedImageFile != null)
+                  Image.file(croppedImageFile!)
                 else
                   Center(child: CircularProgressIndicator()),
                 if (isCameraInitialized)
