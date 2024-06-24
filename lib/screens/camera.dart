@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
 import 'dart:convert';
 
 class CameraScreen extends StatefulWidget {
@@ -25,7 +23,6 @@ class _CameraScreenState extends State<CameraScreen> {
   String validationMessage = '';
   Color validationMessageColor = Colors.red;
   IconData validationIcon = Icons.error;
-  File? croppedImageFile;
 
   final GlobalKey _cameraPreviewKey = GlobalKey();
 
@@ -62,61 +59,21 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final picture = await _cameraController?.takePicture();
       if (picture != null) {
-        // Get the rectangle coordinates
-        final RenderBox renderBox =
-            _cameraPreviewKey.currentContext!.findRenderObject() as RenderBox;
-        final overlayBox =
-            renderBox.localToGlobal(Offset.zero) & renderBox.size;
-
-        final croppedFile = await cropImage(picture.path, overlayBox);
-        if (croppedFile != null) {
-          final inputImage = InputImage.fromFilePath(croppedFile.path);
-
-          final RecognizedText recognizedText =
-              await textRecognizer.processImage(inputImage);
-          setState(() {
-            scannedTextLines = recognizedText.text.split('\n');
-            validationMessage = '';
-            showValidationMessage = false;
-            showTextArea = true;
-            croppedImageFile = croppedFile;
-          });
-        }
+        final inputImage = InputImage.fromFilePath(picture.path);
+        final RecognizedText recognizedText =
+            await textRecognizer.processImage(inputImage);
+        setState(() {
+          scannedTextLines = recognizedText.text.split('\n');
+          validationMessage = '';
+          showValidationMessage = false;
+          showTextArea = true;
+        });
       }
     } catch (e) {
       print(e);
     }
 
     isBusy = false;
-  }
-
-  Future<File?> cropImage(String imagePath, Rect overlayBox) async {
-    try {
-      final bytes = await File(imagePath).readAsBytes();
-      final originalImage = img.decodeImage(Uint8List.fromList(bytes))!;
-
-      // Calculate the scale factors based on actual picture dimensions
-      final double scaleX =
-          originalImage.width / MediaQuery.of(context).size.width;
-      final double scaleY =
-          originalImage.height / MediaQuery.of(context).size.height;
-
-      // Apply the scale factors to the overlay box coordinates
-      final int left = (overlayBox.left * scaleX).toInt();
-      final int top = (overlayBox.top * scaleY).toInt();
-      final int width = (overlayBox.width * scaleX).toInt();
-      final int height = (overlayBox.height * scaleY).toInt();
-
-      final croppedImage =
-          img.copyCrop(originalImage, left, top, width, height);
-      final croppedFile = File(imagePath)
-        ..writeAsBytesSync(img.encodeJpg(croppedImage));
-      print("Cropped image saved successfully.");
-      return croppedFile;
-    } catch (e) {
-      print("Error: $e");
-      return null;
-    }
   }
 
   Future<void> validateBatchNumber() async {
@@ -164,7 +121,6 @@ class _CameraScreenState extends State<CameraScreen> {
       showTextArea = false;
       showValidationMessage = false;
       validationMessage = '';
-      croppedImageFile = null;
     });
   }
 
@@ -183,10 +139,8 @@ class _CameraScreenState extends State<CameraScreen> {
             child: Stack(
               key: _cameraPreviewKey,
               children: [
-                if (isCameraInitialized && croppedImageFile == null)
+                if (isCameraInitialized)
                   CameraPreview(_cameraController!)
-                else if (croppedImageFile != null)
-                  Image.file(croppedImageFile!)
                 else
                   Center(child: CircularProgressIndicator()),
                 if (isCameraInitialized)
@@ -198,7 +152,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: Colors.red,
+                          color: Colors.green, // Change border color to green
                           width: 3,
                         ),
                       ),
@@ -207,7 +161,7 @@ class _CameraScreenState extends State<CameraScreen> {
                           'Place product information inside the rectangle',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.red,
+                            color: Colors.green,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
