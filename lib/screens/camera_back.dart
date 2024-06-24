@@ -154,14 +154,14 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Product Scanner',
+        title: const Text('Product Scanner',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.black,
       ),
       body: Column(
         children: [
-          SizedBox(height: 10),
-          Container(
+          const SizedBox(height: 10),
+          SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
             child: isCameraInitialized
                 ? Center(
@@ -170,16 +170,16 @@ class _CameraScreenState extends State<CameraScreen> {
                       child: CameraPreview(_cameraController!),
                     ),
                   )
-                : Center(child: CircularProgressIndicator()),
+                : const Center(child: CircularProgressIndicator()),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton.icon(
                 onPressed: scanText,
-                icon: Icon(Icons.camera_alt, color: Colors.black),
-                label: Text('Scan',
+                icon: const Icon(Icons.camera_alt, color: Colors.black),
+                label: const Text('Scan',
                     style: TextStyle(
                         color: Colors.black,
                         fontSize: 20,
@@ -188,15 +188,15 @@ class _CameraScreenState extends State<CameraScreen> {
                   backgroundColor: Colors.blue,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8.0),
-                    side: BorderSide(color: Colors.black),
+                    side: const BorderSide(color: Colors.black),
                   ),
                 ),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               ElevatedButton.icon(
                 onPressed: clearScannedText,
-                icon: Icon(Icons.refresh, color: Colors.black),
-                label: Text('Reset',
+                icon: const Icon(Icons.refresh, color: Colors.black),
+                label: const Text('Reset',
                     style: TextStyle(
                         color: Colors.black,
                         fontSize: 20,
@@ -205,13 +205,13 @@ class _CameraScreenState extends State<CameraScreen> {
                   backgroundColor: Colors.blue,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8.0),
-                    side: BorderSide(color: Colors.black),
+                    side: const BorderSide(color: Colors.black),
                   ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           if (showTextArea) // Conditionally render the text area and validate button
             Expanded(
               child: Padding(
@@ -219,17 +219,17 @@ class _CameraScreenState extends State<CameraScreen> {
                 child: Card(
                   color: Colors.white.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
-                    side: BorderSide(color: Colors.black),
+                    side: const BorderSide(color: Colors.black),
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: ListView(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     children: scannedTextLines.map((line) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Text(
                           line,
-                          style: TextStyle(fontSize: 18),
+                          style: const TextStyle(fontSize: 18),
                         ),
                       );
                     }).toList(),
@@ -239,19 +239,20 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
           if (showTextArea) // Conditionally render the validate button or loading icon
             isValidating
-                ? CircularProgressIndicator() // Show loading icon
+                ? const CircularProgressIndicator() // Show loading icon
                 : ElevatedButton(
                     onPressed: validateBatchNumber,
-                    child: Text('Validate', style: TextStyle(fontSize: 20)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.0),
-                        side: BorderSide(color: Colors.black),
+                        side: const BorderSide(color: Colors.black),
                       ),
                     ),
+                    child:
+                        const Text('Validate', style: TextStyle(fontSize: 20)),
                   ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           if (showValidationMessage) // Conditionally render the validation message container
             Container(
               padding: const EdgeInsets.all(18.0),
@@ -262,17 +263,17 @@ class _CameraScreenState extends State<CameraScreen> {
                 children: [
                   Icon(validationIcon,
                       color: Colors.black), // Show validation icon
-                  SizedBox(width: 10),
+                  const SizedBox(width: 10),
                   Text(
                     validationMessage,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: 18,
                         color: Colors.black), // Set the text color to black
                   ),
                 ],
               ),
             ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
         ],
       ),
     );
