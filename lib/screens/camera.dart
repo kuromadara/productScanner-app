@@ -172,7 +172,7 @@ class _CameraScreenState extends State<CameraScreen> {
           const SizedBox(height: 10),
           Expanded(
             child: Center(
-              child: Container(
+              child: SizedBox(
                 width: MediaQuery.of(context)
                     .size
                     .width, // Use the width of the screen
