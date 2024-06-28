@@ -62,26 +62,39 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final picture = await _cameraController?.takePicture();
       if (picture != null) {
-        // Get the rectangle coordinates
-        final RenderBox renderBox =
-            _cameraPreviewKey.currentContext!.findRenderObject() as RenderBox;
-        final overlayBox =
-            renderBox.localToGlobal(Offset.zero) & renderBox.size;
+        final inputImage = InputImage.fromFilePath(picture.path);
+        final RecognizedText recognizedText =
+            await textRecognizer.processImage(inputImage);
 
-        // Process the captured image to get only the part inside the green square
-        final croppedFile =
-            await processCapturedImage(picture.path, overlayBox);
-        if (croppedFile != null) {
-          final inputImage = InputImage.fromFilePath(croppedFile.path);
-          final RecognizedText recognizedText =
-              await textRecognizer.processImage(inputImage);
-          setState(() {
-            scannedTextLines = recognizedText.text.split('\n');
-            validationMessage = '';
-            showValidationMessage = false;
-            showTextArea = true;
-            croppedImageFile = croppedFile;
-          });
+        // Split scanned text into lines
+        List<String> lines = recognizedText.text.split('\n');
+
+        // Check if the first line has exactly 12 characters after trimming spaces
+        if (lines.isNotEmpty) {
+          String firstLine =
+              lines[0].trim().replaceAll(' ', ''); // Remove spaces
+          if (firstLine.length == 12) {
+            // Capture up to four lines
+            setState(() {
+              scannedTextLines =
+                  lines.sublist(0, lines.length > 4 ? 4 : lines.length);
+              validationMessage = '';
+              showValidationMessage = false;
+              showTextArea = true;
+              croppedImageFile = File(picture.path); // Save the captured image
+            });
+          } else {
+            setState(() {
+              showValidationMessage = true;
+              validationMessage =
+                  'Error: ${lines[0].trim()} is not a valid batch number';
+              validationMessageColor = Colors.red;
+              validationIcon = Icons.error;
+              showTextArea = false;
+              scannedTextLines = [];
+              croppedImageFile = File(picture.path); // Save the captured image
+            });
+          }
         }
       }
     } catch (e) {
@@ -89,47 +102,6 @@ class _CameraScreenState extends State<CameraScreen> {
     }
 
     isBusy = false;
-  }
-
-  Future<File?> processCapturedImage(String imagePath, Rect overlayBox) async {
-    try {
-      final bytes = await File(imagePath).readAsBytes();
-      final originalImage = img.decodeImage(Uint8List.fromList(bytes))!;
-
-      // Get the size of the Camera Preview
-      final previewSize = _cameraController!.value.previewSize!;
-      final previewWidth = previewSize.width;
-      final previewHeight = previewSize.height;
-
-      // Calculate the scaling factor for the coordinates
-      final double scaleX = originalImage.width / previewWidth;
-      final double scaleY = originalImage.height / previewHeight;
-
-      // Define the green rectangle on the screen
-      final double greenRectLeft = 30.0;
-      final double greenRectTop = 50.0;
-      final double greenRectWidth = MediaQuery.of(context).size.width - 60.0;
-      final double greenRectHeight = MediaQuery.of(context).size.height -
-          MediaQuery.of(context).size.height * 0.3 -
-          100.0;
-
-      // Apply the scaling factors to the green rectangle's coordinates to get the crop area
-      final int cropLeft = (greenRectLeft * scaleX).toInt();
-      final int cropTop = (greenRectTop * scaleY).toInt();
-      final int cropWidth = (greenRectWidth * scaleX).toInt();
-      final int cropHeight = (greenRectHeight * scaleY).toInt();
-
-      // Crop the image to the specified region
-      final croppedImage =
-          img.copyCrop(originalImage, cropLeft, cropTop, cropWidth, cropHeight);
-      final croppedFile = File('${Directory.systemTemp.path}/cropped_image.jpg')
-        ..writeAsBytesSync(img.encodeJpg(croppedImage));
-      print("Cropped image saved successfully.");
-      return croppedFile;
-    } catch (e) {
-      print("Error: $e");
-      return null;
-    }
   }
 
   Future<void> validateBatchNumber() async {
@@ -173,6 +145,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   void clearScannedText() {
     setState(() {
+      initializeCamera();
       scannedTextLines = [];
       showTextArea = false;
       showValidationMessage = false;
@@ -198,101 +171,112 @@ class _CameraScreenState extends State<CameraScreen> {
         children: [
           const SizedBox(height: 10),
           Expanded(
-            child: Stack(
-              key: _cameraPreviewKey,
-              children: [
-                if (isCameraInitialized && croppedImageFile == null)
-                  CameraPreview(_cameraController!)
-                else if (croppedImageFile != null)
-                  Image.file(croppedImageFile!)
-                else
-                  const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                if (isCameraInitialized)
-                  Positioned(
-                    left: 30,
-                    right: 30,
-                    top: 50,
-                    bottom: MediaQuery.of(context).size.height * 0.3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.green, // Change border color to green
-                          width: 3,
+            child: Center(
+              child: Container(
+                width: MediaQuery.of(context)
+                    .size
+                    .width, // Use the width of the screen
+                child: AspectRatio(
+                  aspectRatio: 1, // Set aspect ratio to 1:1 for square view
+                  child: Stack(
+                    key: _cameraPreviewKey,
+                    children: [
+                      if (isCameraInitialized && croppedImageFile == null)
+                        Center(child: CameraPreview(_cameraController!))
+                      else if (croppedImageFile != null)
+                        Center(child: Image.file(croppedImageFile!))
+                      else
+                        const Center(
+                          child: CircularProgressIndicator(),
                         ),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Place product information inside the rectangle',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
-              ],
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: scanText,
-                icon: const Icon(
-                  Icons.camera_alt,
-                  color: Colors.black,
-                ),
-                label: const Text(
-                  'Scan',
-                  style: TextStyle(
+          if (croppedImageFile ==
+              null) // Show scan and reset buttons only if no image is captured
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: scanText,
+                  icon: const Icon(
+                    Icons.camera_alt,
                     color: Colors.black,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                    side: const BorderSide(
+                  label: const Text(
+                    'Scan',
+                    style: TextStyle(
                       color: Colors.black,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                      side: const BorderSide(
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton.icon(
-                onPressed: clearScannedText,
-                icon: const Icon(
-                  Icons.refresh,
-                  color: Colors.black,
-                ),
-                label: const Text(
-                  'Reset',
-                  style: TextStyle(
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: clearScannedText,
+                  icon: const Icon(
+                    Icons.refresh,
                     color: Colors.black,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                    side: const BorderSide(
+                  label: const Text(
+                    'Reset',
+                    style: TextStyle(
                       color: Colors.black,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                      side: const BorderSide(
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ),
+              ],
+            )
+          else // Show only the reset button if an image is captured
+            ElevatedButton.icon(
+              onPressed: clearScannedText,
+              icon: const Icon(
+                Icons.refresh,
+                color: Colors.black,
               ),
-            ],
-          ),
+              label: const Text(
+                'Reset',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  side: const BorderSide(
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           if (showTextArea)
             Expanded(
@@ -321,25 +305,26 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ),
             ),
-          if (showTextArea)
-            isValidating
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: validateBatchNumber,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                        side: const BorderSide(color: Colors.black),
-                      ),
-                    ),
-                    child: const Text(
-                      'Validate',
-                      style: TextStyle(
-                        fontSize: 20,
-                      ),
-                    ),
-                  ),
+          if (showTextArea &&
+              !isValidating) // Validate button shown only if there are lines and not validating
+            ElevatedButton(
+              onPressed: validateBatchNumber,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  side: const BorderSide(color: Colors.black),
+                ),
+              ),
+              child: const Text(
+                'Validate',
+                style: TextStyle(
+                  fontSize: 20,
+                ),
+              ),
+            ),
+          if (isValidating) // Show progress indicator while validating
+            const CircularProgressIndicator(),
           const SizedBox(height: 10),
           if (showValidationMessage)
             Container(
