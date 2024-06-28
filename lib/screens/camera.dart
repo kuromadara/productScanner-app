@@ -66,22 +66,18 @@ class _CameraScreenState extends State<CameraScreen> {
         final RecognizedText recognizedText =
             await textRecognizer.processImage(inputImage);
 
-        // Split scanned text into lines
         List<String> lines = recognizedText.text.split('\n');
 
-        // Check if the first line has exactly 12 characters after trimming spaces
         if (lines.isNotEmpty) {
-          String firstLine =
-              lines[0].trim().replaceAll(' ', ''); // Remove spaces
+          String firstLine = lines[0].trim().replaceAll(' ', '');
           if (firstLine.length == 12) {
-            // Capture up to four lines
             setState(() {
               scannedTextLines =
                   lines.sublist(0, lines.length > 4 ? 4 : lines.length);
               validationMessage = '';
               showValidationMessage = false;
               showTextArea = true;
-              croppedImageFile = File(picture.path); // Save the captured image
+              croppedImageFile = File(picture.path);
             });
           } else {
             setState(() {
@@ -92,7 +88,7 @@ class _CameraScreenState extends State<CameraScreen> {
               validationIcon = Icons.error;
               showTextArea = false;
               scannedTextLines = [];
-              croppedImageFile = File(picture.path); // Save the captured image
+              croppedImageFile = File(picture.path);
             });
           }
         }
@@ -173,11 +169,9 @@ class _CameraScreenState extends State<CameraScreen> {
           Expanded(
             child: Center(
               child: SizedBox(
-                width: MediaQuery.of(context)
-                    .size
-                    .width, // Use the width of the screen
+                width: MediaQuery.of(context).size.width,
                 child: AspectRatio(
-                  aspectRatio: 1, // Set aspect ratio to 1:1 for square view
+                  aspectRatio: 1,
                   child: Stack(
                     key: _cameraPreviewKey,
                     children: [
@@ -196,8 +190,7 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          if (croppedImageFile ==
-              null) // Show scan and reset buttons only if no image is captured
+          if (croppedImageFile == null)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -252,7 +245,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ],
             )
-          else // Show only the reset button if an image is captured
+          else
             ElevatedButton.icon(
               onPressed: clearScannedText,
               icon: const Icon(
@@ -305,8 +298,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ),
             ),
-          if (showTextArea &&
-              !isValidating) // Validate button shown only if there are lines and not validating
+          if (showTextArea && !isValidating)
             ElevatedButton(
               onPressed: validateBatchNumber,
               style: ElevatedButton.styleFrom(
@@ -323,8 +315,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ),
             ),
-          if (isValidating) // Show progress indicator while validating
-            const CircularProgressIndicator(),
+          if (isValidating) const CircularProgressIndicator(),
           const SizedBox(height: 10),
           if (showValidationMessage)
             Container(
