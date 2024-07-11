@@ -1,9 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -26,8 +24,8 @@ class _CameraScreenState extends State<CameraScreen> {
   Color validationMessageColor = Colors.red;
   IconData validationIcon = Icons.error;
   File? croppedImageFile;
-
-  final GlobalKey _cameraPreviewKey = GlobalKey();
+  bool isTypeOne = true; // Default to Type One
+  String? batchNo;
 
   @override
   void initState() {
@@ -69,29 +67,15 @@ class _CameraScreenState extends State<CameraScreen> {
         List<String> lines = recognizedText.text.split('\n');
 
         if (lines.isNotEmpty) {
-          String firstLine = lines[0].trim().replaceAll(' ', '');
-          if (firstLine.length == 12) {
-            setState(() {
-              scannedTextLines =
-                  lines.sublist(0, lines.length > 4 ? 4 : lines.length);
-              validationMessage = '';
-              showValidationMessage = false;
-              showTextArea = true;
-              croppedImageFile = File(picture.path);
-            });
+          if (isTypeOne) {
+            processTypeOne(lines);
           } else {
-            setState(() {
-              showValidationMessage = true;
-              validationMessage =
-                  'Error: ${lines[0].trim()} is not a valid batch number';
-              validationMessageColor = Colors.red;
-              validationIcon = Icons.error;
-              showTextArea = false;
-              scannedTextLines = [];
-              croppedImageFile = File(picture.path);
-            });
+            processTypeTwo(lines);
           }
         }
+        setState(() {
+          croppedImageFile = File(picture.path);
+        });
       }
     } catch (e) {
       print(e);
@@ -100,14 +84,67 @@ class _CameraScreenState extends State<CameraScreen> {
     isBusy = false;
   }
 
+  void processTypeOne(List<String> lines) {
+    if (lines.length >= 1) {
+      String firstLine = lines[0].trim().replaceAll(' ', '');
+      if (firstLine.length == 12) {
+        setState(() {
+          batchNo = firstLine;
+          scannedTextLines =
+              lines.sublist(0, lines.length > 4 ? 4 : lines.length);
+          validationMessage = '';
+          showValidationMessage = false;
+          showTextArea = true;
+        });
+      } else {
+        setErrorState(
+            'Error: ${firstLine} is not a valid batch number for Type One');
+      }
+    } else {
+      setErrorState('Error: No text detected for Type One');
+    }
+  }
+
+  void processTypeTwo(List<String> lines) {
+    if (lines.length >= 2) {
+      String secondLine = lines[1].trim().replaceAll(' ', '');
+      if (secondLine.length == 10) {
+        setState(() {
+          batchNo = secondLine;
+          scannedTextLines =
+              lines.sublist(0, lines.length > 4 ? 4 : lines.length);
+          validationMessage = '';
+          showValidationMessage = false;
+          showTextArea = true;
+        });
+      } else {
+        setErrorState(
+            'Error: ${secondLine} is not a valid 3-character code for Type Two');
+      }
+    } else {
+      setErrorState('Error: Not enough lines detected for Type Two');
+    }
+  }
+
+  void setErrorState(String message) {
+    setState(() {
+      showValidationMessage = true;
+      validationMessage = message;
+      validationMessageColor = Colors.red;
+      validationIcon = Icons.error;
+      showTextArea = false;
+      scannedTextLines = [];
+      batchNo = null;
+    });
+  }
+
   Future<void> validateBatchNumber() async {
-    if (scannedTextLines.isEmpty) return;
+    if (batchNo == null) return;
 
     setState(() {
       isValidating = true;
     });
 
-    final batchNo = scannedTextLines[0];
     final url = Uri.parse('http://192.168.0.118/productScan/public/api/scan');
     final response = await http.post(url, body: {'batchNo': batchNo});
 
@@ -147,6 +184,7 @@ class _CameraScreenState extends State<CameraScreen> {
       showValidationMessage = false;
       validationMessage = '';
       croppedImageFile = null;
+      batchNo = null;
     });
   }
 
@@ -161,183 +199,234 @@ class _CameraScreenState extends State<CameraScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.blue,
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 10),
-          Expanded(
-            child: Center(
-              child: SizedBox(
-                width: MediaQuery.of(context).size.width,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.blue[100]!, Colors.blue[50]!],
+          ),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Type One',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Switch(
+                  value: !isTypeOne,
+                  onChanged: (value) {
+                    setState(() {
+                      isTypeOne = !value;
+                      clearScannedText();
+                    });
+                  },
+                  activeColor: Colors.blue,
+                ),
+                Text('Type Two',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: Center(
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: Stack(
-                    key: _cameraPreviewKey,
-                    children: [
-                      if (isCameraInitialized && croppedImageFile == null)
-                        Center(child: CameraPreview(_cameraController!))
-                      else if (croppedImageFile != null)
-                        Center(child: Image.file(croppedImageFile!))
-                      else
-                        const Center(
-                          child: CircularProgressIndicator(),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.blue, width: 3),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: Offset(0, 3),
                         ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(17),
+                      child: isCameraInitialized && croppedImageFile == null
+                          ? CameraPreview(_cameraController!)
+                          : croppedImageFile != null
+                              ? Image.file(croppedImageFile!, fit: BoxFit.cover)
+                              : const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            if (croppedImageFile == null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: scanText,
+                    icon: const Icon(Icons.camera_alt, color: Colors.white),
+                    label: const Text(
+                      'Scan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: clearScannedText,
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    label: const Text(
+                      'Reset',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: clearScannedText,
+                icon: const Icon(Icons.refresh, color: Colors.white),
+                label: const Text(
+                  'Reset',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+            if (showTextArea)
+              Expanded(
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ListView(
+                    children: [
+                      Text(
+                        'Batch Number: $batchNo',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 10),
+                      ...scannedTextLines.map((line) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Text(
+                            line,
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                        );
+                      }).toList(),
                     ],
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (croppedImageFile == null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: scanText,
-                  icon: const Icon(
-                    Icons.camera_alt,
-                    color: Colors.black,
+            if (showTextArea && !isValidating)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20.0),
+                child: ElevatedButton(
+                  onPressed: validateBatchNumber,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
                   ),
-                  label: const Text(
-                    'Scan',
+                  child: const Text(
+                    'Validate',
                     style: TextStyle(
-                      color: Colors.black,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton.icon(
-                  onPressed: clearScannedText,
-                  icon: const Icon(
-                    Icons.refresh,
-                    color: Colors.black,
-                  ),
-                  label: const Text(
-                    'Reset',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            ElevatedButton.icon(
-              onPressed: clearScannedText,
-              icon: const Icon(
-                Icons.refresh,
-                color: Colors.black,
-              ),
-              label: const Text(
-                'Reset',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                  side: const BorderSide(
-                    color: Colors.black,
-                  ),
-                ),
+            if (isValidating)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20.0),
+                child: CircularProgressIndicator(),
               ),
-            ),
-          const SizedBox(height: 10),
-          if (showTextArea)
-            Expanded(
-              child: Padding(
+            if (showValidationMessage)
+              Container(
+                width: MediaQuery.of(context).size.width * 0.9,
                 padding: const EdgeInsets.all(16.0),
-                child: Card(
-                  color: Colors.white.withOpacity(0.5),
-                  shape: RoundedRectangleBorder(
-                    side: const BorderSide(
-                      color: Colors.black,
-                    ),
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: scannedTextLines.map((line) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text(
-                          line,
-                          style: const TextStyle(fontSize: 18),
+                margin: const EdgeInsets.only(bottom: 20.0),
+                decoration: BoxDecoration(
+                  color: validationMessageColor,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(validationIcon, color: Colors.white),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        validationMessage,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ),
-          if (showTextArea && !isValidating)
-            ElevatedButton(
-              onPressed: validateBatchNumber,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                  side: const BorderSide(color: Colors.black),
-                ),
-              ),
-              child: const Text(
-                'Validate',
-                style: TextStyle(
-                  fontSize: 20,
-                ),
-              ),
-            ),
-          if (isValidating) const CircularProgressIndicator(),
-          const SizedBox(height: 10),
-          if (showValidationMessage)
-            Container(
-              padding: const EdgeInsets.all(18.0),
-              color: validationMessageColor,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(validationIcon, color: Colors.black),
-                  const SizedBox(width: 10),
-                  Text(
-                    validationMessage,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      color: Colors.black,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          const SizedBox(height: 10),
-        ],
+          ],
+        ),
       ),
     );
   }
