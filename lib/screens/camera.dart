@@ -28,7 +28,7 @@ class _CameraScreenState extends State<CameraScreen>
   Color validationMessageColor = Colors.red;
   IconData validationIcon = Icons.error;
   File? croppedImageFile;
-  bool isTypeOne = true; // Default to Type One
+  bool isTypeOne = true;
   String? batchNo;
 
   late AnimationController _animationController;
@@ -38,19 +38,16 @@ class _CameraScreenState extends State<CameraScreen>
     super.initState();
     initializeCamera();
 
-    // Initialize animation controller
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
 
-    // Create a curved animation
     _animation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeInOut,
     );
 
-    // Show popup after a short delay
     Future.delayed(Duration.zero, () {
       _showPopup();
     });
@@ -223,7 +220,7 @@ class _CameraScreenState extends State<CameraScreen>
             return Transform.scale(
               scale: _animation.value,
               child: AlertDialog(
-                title: Text('Scanning Instructions'),
+                title: const Text('Scanning Instructions'),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -232,8 +229,8 @@ class _CameraScreenState extends State<CameraScreen>
                       width: 200,
                       height: 200,
                     ),
-                    SizedBox(height: 20),
-                    Text(
+                    const SizedBox(height: 20),
+                    const Text(
                       'Please position the white area within the scanner frame for optimal scanning results.',
                       textAlign: TextAlign.center,
                     ),
@@ -241,7 +238,7 @@ class _CameraScreenState extends State<CameraScreen>
                 ),
                 actions: [
                   TextButton(
-                    child: Text('Got it!'),
+                    child: const Text('Got it!'),
                     onPressed: () {
                       Navigator.of(context).pop();
                     },
