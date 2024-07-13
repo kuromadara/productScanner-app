@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:lottie/lottie.dart';
 
 class CameraScreen extends StatefulWidget {
+  const CameraScreen({super.key});
+
   @override
   _CameraScreenState createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
+class _CameraScreenState extends State<CameraScreen>
+    with SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   List<CameraDescription>? cameras;
   bool isBusy = false;
@@ -27,10 +31,29 @@ class _CameraScreenState extends State<CameraScreen> {
   bool isTypeOne = true; // Default to Type One
   String? batchNo;
 
+  late AnimationController _animationController;
+  late Animation<double> _animation;
   @override
   void initState() {
     super.initState();
     initializeCamera();
+
+    // Initialize animation controller
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    // Create a curved animation
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+
+    // Show popup after a short delay
+    Future.delayed(Duration.zero, () {
+      _showPopup();
+    });
   }
 
   Future<void> initializeCamera() async {
@@ -48,6 +71,7 @@ class _CameraScreenState extends State<CameraScreen> {
   void dispose() {
     _cameraController?.dispose();
     textRecognizer.close();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -98,7 +122,7 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       } else {
         setErrorState(
-            'Error: ${firstLine} is not a valid batch number for Type One');
+            'Error: $firstLine is not a valid batch number for Type One');
       }
     } else {
       setErrorState('Error: No text detected for Type One');
@@ -119,7 +143,7 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       } else {
         setErrorState(
-            'Error: ${secondLine} is not a valid 3-character code for Type Two');
+            'Error: $secondLine is not a valid Batch No. for Type Two');
       }
     } else {
       setErrorState('Error: Not enough lines detected for Type Two');
@@ -145,7 +169,7 @@ class _CameraScreenState extends State<CameraScreen> {
       isValidating = true;
     });
 
-    final url = Uri.parse('http://192.168.0.118/productScan/public/api/scan');
+    final url = Uri.parse('http://192.168.0.100/productScan/public/api/scan');
     final response = await http.post(url, body: {'batchNo': batchNo});
 
     if (response.statusCode == 200) {
@@ -188,6 +212,50 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
+  void _showPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AnimatedBuilder(
+          animation: _animation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _animation.value,
+              child: AlertDialog(
+                title: Text('Scanning Instructions'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Lottie.network(
+                      'https://assets10.lottiefiles.com/packages/lf20_jcikwtux.json',
+                      width: 200,
+                      height: 200,
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Please position the white area within the scanner frame for optimal scanning results.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    child: Text('Got it!'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    _animationController.forward();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -215,7 +283,7 @@ class _CameraScreenState extends State<CameraScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Type One',
+                const Text('Type One',
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Switch(
@@ -228,7 +296,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   },
                   activeColor: Colors.blue,
                 ),
-                Text('Type Two',
+                const Text('Type Two',
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
@@ -247,7 +315,7 @@ class _CameraScreenState extends State<CameraScreen> {
                           color: Colors.black.withOpacity(0.2),
                           spreadRadius: 2,
                           blurRadius: 5,
-                          offset: Offset(0, 3),
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
@@ -283,8 +351,8 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -303,8 +371,8 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -326,7 +394,8 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
@@ -346,7 +415,7 @@ class _CameraScreenState extends State<CameraScreen> {
                         color: Colors.black.withOpacity(0.1),
                         spreadRadius: 1,
                         blurRadius: 3,
-                        offset: Offset(0, 2),
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
@@ -354,10 +423,10 @@ class _CameraScreenState extends State<CameraScreen> {
                     children: [
                       Text(
                         'Batch Number: $batchNo',
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(height: 10),
+                      const SizedBox(height: 10),
                       ...scannedTextLines.map((line) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -378,7 +447,8 @@ class _CameraScreenState extends State<CameraScreen> {
                   onPressed: validateBatchNumber,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
-                    padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 30, vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -393,8 +463,8 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ),
             if (isValidating)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20.0),
                 child: CircularProgressIndicator(),
               ),
             if (showValidationMessage)
