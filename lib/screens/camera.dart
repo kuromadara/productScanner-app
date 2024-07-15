@@ -167,7 +167,9 @@ class _CameraScreenState extends State<CameraScreen>
     });
 
     final url = Uri.parse('http://192.168.0.100/productScan/public/api/scan');
-    final response = await http.post(url, body: {'batchNo': batchNo});
+    var type = isTypeOne ? 1 : 2;
+    final response = await http
+        .post(url, body: {'batchNo': batchNo, 'type': type.toString()});
 
     if (response.statusCode == 200) {
       final responseBody = json.decode(response.body);
