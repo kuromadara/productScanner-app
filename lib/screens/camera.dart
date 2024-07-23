@@ -5,6 +5,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:lottie/lottie.dart';
+import 'package:product_scanner/common/common.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -28,11 +29,12 @@ class _CameraScreenState extends State<CameraScreen>
   Color validationMessageColor = Colors.red;
   IconData validationIcon = Icons.error;
   File? croppedImageFile;
-  bool isTypeOne = true;
-  String? batchNo;
+  ProductType selectedProductType = ProductType.teaTypeOne;
+  String? identifier;
 
   late AnimationController _animationController;
   late Animation<double> _animation;
+
   @override
   void initState() {
     super.initState();
@@ -87,14 +89,19 @@ class _CameraScreenState extends State<CameraScreen>
 
         List<String> lines = recognizedText.text.split('\n');
 
-        if (lines.isNotEmpty) {
-          if (isTypeOne) {
-            processTypeOne(lines);
-          } else {
-            processTypeTwo(lines);
-          }
-        }
+        ProcessResult result =
+            TextProcessor.processText(lines, selectedProductType);
+
         setState(() {
+          if (result.isValid) {
+            identifier = result.message;
+            scannedTextLines = result.scannedLines!;
+            validationMessage = '';
+            showValidationMessage = false;
+            showTextArea = true;
+          } else {
+            setErrorState(result.message);
+          }
           croppedImageFile = File(picture.path);
         });
       }
@@ -105,48 +112,6 @@ class _CameraScreenState extends State<CameraScreen>
     isBusy = false;
   }
 
-  void processTypeOne(List<String> lines) {
-    if (lines.length >= 1) {
-      String firstLine = lines[0].trim().replaceAll(' ', '');
-      if (firstLine.length == 12) {
-        setState(() {
-          batchNo = firstLine;
-          scannedTextLines =
-              lines.sublist(0, lines.length > 4 ? 4 : lines.length);
-          validationMessage = '';
-          showValidationMessage = false;
-          showTextArea = true;
-        });
-      } else {
-        setErrorState(
-            'Error: $firstLine is not a valid batch number for Type One');
-      }
-    } else {
-      setErrorState('Error: No text detected for Type One');
-    }
-  }
-
-  void processTypeTwo(List<String> lines) {
-    if (lines.length >= 2) {
-      String secondLine = lines[1].trim().replaceAll(' ', '');
-      if (secondLine.length == 10) {
-        setState(() {
-          batchNo = secondLine;
-          scannedTextLines =
-              lines.sublist(0, lines.length > 4 ? 4 : lines.length);
-          validationMessage = '';
-          showValidationMessage = false;
-          showTextArea = true;
-        });
-      } else {
-        setErrorState(
-            'Error: $secondLine is not a valid Batch No. for Type Two');
-      }
-    } else {
-      setErrorState('Error: Not enough lines detected for Type Two');
-    }
-  }
-
   void setErrorState(String message) {
     setState(() {
       showValidationMessage = true;
@@ -155,21 +120,24 @@ class _CameraScreenState extends State<CameraScreen>
       validationIcon = Icons.error;
       showTextArea = false;
       scannedTextLines = [];
-      batchNo = null;
+      identifier = null;
     });
   }
 
-  Future<void> validateBatchNumber() async {
-    if (batchNo == null) return;
+  Future<void> validateIdentifier() async {
+    if (identifier == null) return;
 
     setState(() {
       isValidating = true;
     });
 
     final url = Uri.parse('http://192.168.0.100/productScan/public/api/scan');
-    var type = isTypeOne ? 1 : 2;
-    final response = await http
-        .post(url, body: {'batchNo': batchNo, 'type': type.toString()});
+    final response = await http.post(url, body: {
+      ProductTypeHelper.isBatchNumber(selectedProductType)
+          ? 'batchNo'
+          : 'lotNo': identifier,
+      'type': selectedProductType.index.toString(),
+    });
 
     if (response.statusCode == 200) {
       final responseBody = json.decode(response.body);
@@ -207,7 +175,7 @@ class _CameraScreenState extends State<CameraScreen>
       showValidationMessage = false;
       validationMessage = '';
       croppedImageFile = null;
-      batchNo = null;
+      identifier = null;
     });
   }
 
@@ -279,26 +247,20 @@ class _CameraScreenState extends State<CameraScreen>
         child: Column(
           children: [
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('Type One',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Switch(
-                  value: !isTypeOne,
-                  onChanged: (value) {
-                    setState(() {
-                      isTypeOne = !value;
-                      clearScannedText();
-                    });
-                  },
-                  activeColor: Colors.blue,
-                ),
-                const Text('Type Two',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ],
+            DropdownButton<ProductType>(
+              value: selectedProductType,
+              onChanged: (ProductType? newValue) {
+                setState(() {
+                  selectedProductType = newValue!;
+                  clearScannedText();
+                });
+              },
+              items: ProductType.values.map((ProductType type) {
+                return DropdownMenuItem<ProductType>(
+                  value: type,
+                  child: Text(ProductTypeHelper.getName(type)),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 20),
             Expanded(
@@ -421,7 +383,7 @@ class _CameraScreenState extends State<CameraScreen>
                   child: ListView(
                     children: [
                       Text(
-                        'Batch Number: $batchNo',
+                        '${ProductTypeHelper.isBatchNumber(selectedProductType) ? 'Batch' : 'Lot'} Number: $identifier',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold),
                       ),
@@ -443,7 +405,7 @@ class _CameraScreenState extends State<CameraScreen>
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20.0),
                 child: ElevatedButton(
-                  onPressed: validateBatchNumber,
+                  onPressed: validateIdentifier,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     padding: const EdgeInsets.symmetric(
