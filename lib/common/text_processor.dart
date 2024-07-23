@@ -48,11 +48,11 @@ class TextProcessor {
     }
 
     String thirdLine = lines[2].trim();
-    if (thirdLine.contains('gl24/tpa')) {
+    if (thirdLine.contains('GL24TPA')) {
       return ProcessResult(true, thirdLine, lines.take(3).toList());
     } else {
       return ProcessResult(
-          false, 'Error: Third line does not contain gl24/tpa for Biscuit');
+          false, 'Error: $thirdLine is not a valid Lot No.for Biscuit');
     }
   }
 }
